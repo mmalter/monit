@@ -79,29 +79,27 @@ class Equation(object):
 		predictors = []
 		for predictor in predictors_:
 			predictors.append(eval('predictor[0].'+predictor[1]))
-		predictors_df = pandas.concat([predicted,predictors[0]],axis=1)
+		self.predictors_df = pandas.concat([predicted,predictors[0]],axis=1)
 		if len(predictors) > 1:
 			for predictor in predictors[1:]:
-				predictors_df = pandas.concat([predictors_df,predictor],axis=1)
-		print(predictors_df.iloc[:,0])
-		self.reg = pandas.ols(y=predictors_df.iloc[:,0],x=predictors_df.iloc[:,1:])
-		self.reg.y_name = predictors_df.columns[0]
+				self.predictors_df = pandas.concat([predictors_df,predictor],axis=1)
+		self.reg = pandas.ols(y=self.predictors_df.iloc[:,0],x=self.predictors_df.iloc[:,1:])
 
 	def addDependency(self, equation):
 		self.dependencies.append(equation)
 
 
-	def init_assumption(self,variable):
+	def init_assumption(self,variable_position,variable,forecast_horizon):
 		try:
 			with open('assumptions/'+variable.replace('/','')+'.csv') as f: pass
 		except IOError as e:
 			print('Initializing '+variable)
 			if self.reg.y.index.freq == 'Q-DEC':
-				period = self.reg.true_x[variable].index.to_period()+forecast_horizon
+				period = self.predictors_df[variable].index.to_period()+forecast_horizon
 				timestamp = period.to_timestamp(how='end')
 				timestamp =  timestamp[-4:]
 			if self.reg.y.index.freq == 'M':
-				period = self.reg.true_x[variable].index.to_period()+forecast_horizon*3
+				period = self.reg.predictors_df[variable].index.to_period()+forecast_horizon*3
 				timestamp = period.to_timestamp(how='end')
 				timestamp =  timestamp[-12:]
 			assumption = pandas.DataFrame(index=timestamp,columns = [variable])
@@ -109,15 +107,16 @@ class Equation(object):
 			assumption.to_csv('assumptions/'+variable.replace('/','')+'.csv')
 	
 	#Turn it into a getter
-	def forecast(self, predictions):
+	def forecast(self, forecast_horizon, predictions=[]):
 		assumptions = []
-		for variable in self.reg.x.columns[:-1]:
-			assumption == None
+		for variable_position in range(0,len(self.reg.x.columns)-1):
+			variable = self.reg.x.columns[variable_position]
+			assumption = None
 			for prediction in predictions:
 				if prediction.columns[1] == variable:
 					assumption = prediction
 			if assumption == None:
-				self.init_assumption(variable)
+				self.init_assumption(variable_position,variable,forecast_horizon)
 				assumption = pandas.read_table('assumptions/'+variable.replace('/','')+'.csv',sep=',',parse_dates=['Date'],index_col=0)
 				assumption = assumption.resample(self.reg.x[variable].index.freq,fill_method='ffill')
 				assumption = pandas.DataFrame({variable : numpy.append(self.reg.true_x[variable].values,assumption.values)}, index = numpy.append(self.reg.true_x[variable].index,assumption.index))
@@ -174,9 +173,13 @@ class Model(object):
 		predicted = []
 		for equation_ in resolved:
 			if equation_ not in hypothesis:
+#find a way to plug in the predictions
 				forecast(equation,)
-			predicted.append(forecast(equation))
-		pre
+			predicted.append([equation,forecast(equation)])
+		return predicted
+
+	def report():
+		print('TODO')
 
 
 
