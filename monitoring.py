@@ -69,22 +69,22 @@ class EconVariable(object):
 class Equation(object):
 	def __init__(self,predicted_,predictors_,title,unit,figname=None):
 		self.predicted = predicted_
-		'''A dictionnary with EconVariable:transformation'''
+		'''A list of lists (EconVariable,transformation)'''
 		self.predictors = predictors_
-		'''A dictionnary with EconVariable:transformation'''
+		'''A list of lists (EconVariable,transformation)'''
 		self.title = title
 		self.figname = figname
 		self.dependencies = []
-		predicted = eval(list(predicted_)[0]+'.'+list(d.values())[0])
+		predicted = eval('self.predicted[0].'+self.predicted[1])
 		predictors = []
-		for key, value in predictors_:
-			predictors.append(eval(key+'.'+value))
+		for predictor in predictors_:
+			predictors.append(eval('predictor[0].'+predictor[1]))
 		predictors_df = pandas.concat([predicted,predictors[0]],axis=1)
 		if len(predictors) > 1:
 			for predictor in predictors[1:]:
 				predictors_df = pandas.concat([predictors_df,predictor],axis=1)
-
-		self.reg = pandas.ols(y=predictors_df[predictors_df.columns[0]],x=predictors_df[predictors_df.columns[1:]])
+		print(predictors_df.iloc[:,0])
+		self.reg = pandas.ols(y=predictors_df.iloc[:,0],x=predictors_df.iloc[:,1:])
 		self.reg.y_name = predictors_df.columns[0]
 
 	def addDependency(self, equation):
@@ -123,6 +123,9 @@ class Equation(object):
 				assumption = pandas.DataFrame({variable : numpy.append(self.reg.true_x[variable].values,assumption.values)}, index = numpy.append(self.reg.true_x[variable].index,assumption.index))
 				assumption.index.name = 'Date'
 				assumption = EconVariable(assumption)
+			for key, value in self.predicted:
+				if assumption.columns[1] == key.columns[1]:
+					assumption = eval('assumption.'+value)
 			assumptions.append(assumption)
 		if len(assumptions) == 1:
 			assumptions_ = assumptions[0]
@@ -131,7 +134,6 @@ class Equation(object):
 		if len(assumptions) > 2:
 			for assumption in assumptions:
 				assumptions_ = pandas.concat([assumptions_,assumption],axis=1)
-		#Now that we have the assumptions, let's predict!!!
 		return EconVariable(self.reg.predict(self.reg.beta,assumptions_))
 
 class Node(object):
@@ -174,6 +176,7 @@ class Model(object):
 			if equation_ not in hypothesis:
 				forecast(equation,)
 			predicted.append(forecast(equation))
+		pre
 
 
 
