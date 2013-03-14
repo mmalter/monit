@@ -118,7 +118,7 @@ class Equation(object):
 			assumption = None
 			for prediction in predictions:
 				if prediction.columns[0] == variable.lvl.columns[0]:
-					assumption = prediction
+					assumption = prediction[-forecast_horizon:]
 			if assumption == None:
 				self.init_assumption(variable,forecast_horizon)
 				assumption = pandas.read_table('assumptions/'+variable.lvl.columns[0].replace('/','')+'.csv',sep=',',parse_dates=['Date'],index_col=0)
@@ -171,10 +171,10 @@ class Model(object):
 
 	def solve(self,equation):
 		self.dep_resolv(equation)
-		self.prediction = []
+		self.predictions = []
 		for equation_ in self.resolved:
-			self.prediction.append([equation,equation.forecast(4)])
-		return self.prediction
+			self.prediction.append([equation,equation.forecast(4),self.pledictions])
+		return self.predictions
 
 	def report():
 		print('TODO')
