@@ -173,7 +173,7 @@ class Model(object):
 		self.dep_resolv(equation)
 		self.predictions = []
 		for equation_ in self.resolved:
-			self.prediction.append([equation,equation.forecast(4),self.pledictions])
+			self.prediction.append([equation_,equation_.forecast(4),self.predictions])
 		return self.predictions
 
 	def report():
