@@ -1,4 +1,5 @@
 import pandas
+import numpy
 
 class EconVariable(object):
 #I'm not subclassing pandas.DataFrame because it heavily uses __new__ to check if self is a DataFrame. pandas classes are difficult to subclass.
@@ -79,52 +80,54 @@ class Equation(object):
 		predictors = []
 		for predictor in predictors_:
 			predictors.append(eval('predictor[0].'+predictor[1]))
-		self.predictors_df = pandas.concat([predicted,predictors[0]],axis=1)
+		self.predictors_df = pandas.concat([predicted,predictors[0]],axis=1,keys=[1,2])
 		if len(predictors) > 1:
+			i = 0
 			for predictor in predictors[1:]:
-				self.predictors_df = pandas.concat([predictors_df,predictor],axis=1)
+				self.predictors_df = pandas.concat([self.predictors_df,predictor],axis=1,keys=[i,i+1])
+		self.predictors_df.columns = [predicted.columns[0]]+[predictor[0].lvl.columns[0] for predictor in predictors_]
 		self.reg = pandas.ols(y=self.predictors_df.iloc[:,0],x=self.predictors_df.iloc[:,1:])
+		self.reg.true_x = self.predictors_df[self.predictors_df.columns[1:]]
 
 	def addDependency(self, equation):
 		self.dependencies.append(equation)
 
 
-	def init_assumption(self,variable_position,variable,forecast_horizon):
+	def init_assumption(self,variable,forecast_horizon):
 		try:
-			with open('assumptions/'+variable.replace('/','')+'.csv') as f: pass
+			with open('assumptions/'+variable.lvl.columns[0].replace('/','')+'.csv') as f: pass
 		except IOError as e:
-			print('Initializing '+variable)
-			if self.reg.y.index.freq == 'Q-DEC':
-				period = self.predictors_df[variable].index.to_period()+forecast_horizon
+			print('Initializing '+variable.lvl.columns[0])
+			if variable.lvl.index.freq == 'Q-DEC':
+				period = variable.lvl.index.to_period()+forecast_horizon
 				timestamp = period.to_timestamp(how='end')
 				timestamp =  timestamp[-4:]
-			if self.reg.y.index.freq == 'M':
-				period = self.reg.predictors_df[variable].index.to_period()+forecast_horizon*3
+			if variable.lvl.index.freq == 'M':
+				period = variable.lvl.index.to_period()+forecast_horizon*3
 				timestamp = period.to_timestamp(how='end')
 				timestamp =  timestamp[-12:]
-			assumption = pandas.DataFrame(index=timestamp,columns = [variable])
+			assumption = pandas.DataFrame(index=timestamp,columns = [variable.lvl.columns])
 			assumption.index.name = 'Date'
-			assumption.to_csv('assumptions/'+variable.replace('/','')+'.csv')
+			assumption.to_csv('assumptions/'+variable.lvl.columns[0].replace('/','')+'.csv')
 	
 	#Turn it into a getter
 	def forecast(self, forecast_horizon, predictions=[]):
+		'''predictions must be a list of EconVariables'''
 		assumptions = []
-		for variable_position in range(0,len(self.reg.x.columns)-1):
-			variable = self.reg.x.columns[variable_position]
+		for variable, transformation in self.predictors:
 			assumption = None
 			for prediction in predictions:
-				if prediction.columns[1] == variable:
+				if prediction.columns[0] == variable.lvl.columns[0]:
 					assumption = prediction
 			if assumption == None:
-				self.init_assumption(variable_position,variable,forecast_horizon)
-				assumption = pandas.read_table('assumptions/'+variable.replace('/','')+'.csv',sep=',',parse_dates=['Date'],index_col=0)
-				assumption = assumption.resample(self.reg.x[variable].index.freq,fill_method='ffill')
-				assumption = pandas.DataFrame({variable : numpy.append(self.reg.true_x[variable].values,assumption.values)}, index = numpy.append(self.reg.true_x[variable].index,assumption.index))
+				self.init_assumption(variable,forecast_horizon)
+				assumption = pandas.read_table('assumptions/'+variable.lvl.columns[0].replace('/','')+'.csv',sep=',',parse_dates=['Date'],index_col=0)
+				#assumption = assumption.resample(variable.lvl.index.freq,fill_method='ffill')
+				assumption = pandas.DataFrame({variable.lvl.columns[0] : numpy.append(variable.lvl.values,assumption.values)}, index = numpy.append(variable.lvl.index,assumption.index))
 				assumption.index.name = 'Date'
+				assumption = assumption.resample(variable.lvl.index.freq,fill_method='ffill')
 				assumption = EconVariable(assumption)
-			for key, value in self.predicted:
-				if assumption.columns[1] == key.columns[1]:
-					assumption = eval('assumption.'+value)
+			assumption = eval('assumption.'+transformation)
 			assumptions.append(assumption)
 		if len(assumptions) == 1:
 			assumptions_ = assumptions[0]
@@ -133,7 +136,7 @@ class Equation(object):
 		if len(assumptions) > 2:
 			for assumption in assumptions:
 				assumptions_ = pandas.concat([assumptions_,assumption],axis=1)
-		return EconVariable(self.reg.predict(self.reg.beta,assumptions_))
+		return self.reg.predict(self.reg.beta,assumptions_)
 
 class Node(object):
 	def __init__(self, name):
@@ -141,49 +144,43 @@ class Node(object):
 
 class Model(object):	
 	def __init__(self,equations):
-		self.available_predicted={}
+		self.unresolved = []
+		self.resolved = []
+		self.equations = []
+		self.hypothesis = []
 		for equation in equations:
-			for key, value in equation.predicted:
-				self.available_predicted[key] 
-		for equation in equations:
-			equation.dependencies = Node()
-		for equation in equations:
-			for predictor_name, predictor_transformation in equation.predictors:
-				if predictor_name in self.available_predicted:
-					equation.dependencies.addEdge(equation.dependencies)
+			equation.dependencies = []
+			for predictor in equation.predictors:
+				for equation_ in equations:
+					if equation != equation_:
+						if predictor[0].lvl.columns[0] == equation_.predicted[0].lvl.columns[0]:
+							equation.addDependency(equation_)
+			self.equations.append(equation)
 
-	def dep_resolv(equation,resolved,unresolved,hypothesis):		
-		unresolved.append(equation)
+	def dep_resolv(self,equation):		
+		self.unresolved.append(equation)
 		if equation.dependencies == []:
-			hypothesis.append(node)
+			self.hypothesis.append(equation)
 		for dependency in equation.dependencies:
-			if dependency not in resolved:
-				if dependency in unresolved:
+			if dependency not in self.resolved:
+				if dependency in self.unresolved:
 					raise Exception('Circular dependence found')
-				dep_resol(dependency,resolved,unresolvedr)
-		resolved.append(equation)		
-		unresolved.remove(equation)
-		return
+				self.dep_resolv(dependency)
+		self.resolved.append(equation)		
+		self.unresolved.remove(equation)
 
 	def solve(self,equation):
-		resolved = []
-		unresolved = []
-		hypothesis = []
-		dep_resolv(equation,resolved,unresolved,hypothesis)
-		predicted = []
-		for equation_ in resolved:
-			if equation_ not in hypothesis:
-#find a way to plug in the predictions
-				forecast(equation,)
-			predicted.append([equation,forecast(equation)])
-		return predicted
+		self.dep_resolv(equation)
+		self.prediction = []
+		for equation_ in self.resolved:
+			self.prediction.append([equation,equation.forecast(4)])
+		return self.prediction
 
 	def report():
 		print('TODO')
 
 
 
-	#def assumptions_or_predicted(self)
 
 
 
@@ -195,4 +192,3 @@ class Model(object):
 			#plt.title(title+' - Actual vs fitted')
 			#plt.ylabel(unit)
 			#plt.savefig(figname)
-		#self.reg.true_x = predictors_df[predictors_df.columns[1:]]
