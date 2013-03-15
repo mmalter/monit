@@ -1,5 +1,6 @@
 import pandas
 import numpy
+import re
 
 class EconVariable(object):
 #I'm not subclassing pandas.DataFrame because it heavily uses __new__ to check if self is a DataFrame. pandas classes are difficult to subclass.
@@ -80,14 +81,26 @@ class Equation(object):
 		predictors = []
 		for predictor in predictors_:
 			predictors.append(eval('predictor[0].'+predictor[1]))
-		self.predictors_df = pandas.concat([predicted,predictors[0]],axis=1,keys=[1,2])
+		self.predictors_df = pandas.concat([predicted,predictors[0]],axis=1)
 		if len(predictors) > 1:
-			i = 0
+			i = 3
 			for predictor in predictors[1:]:
-				self.predictors_df = pandas.concat([self.predictors_df,predictor],axis=1,keys=[i,i+1])
+				print(self.predictors_df)
+				print('a')
+				print(predictor)
+				self.predictors_df = pandas.concat([self.predictors_df,predictor],axis=1)
+				i += 1
 		self.predictors_df.columns = [predicted.columns[0]]+[predictor[0].lvl.columns[0] for predictor in predictors_]
 		self.reg = pandas.ols(y=self.predictors_df.iloc[:,0],x=self.predictors_df.iloc[:,1:])
 		self.reg.true_x = self.predictors_df[self.predictors_df.columns[1:]]
+		self.lags = [0] 
+		p = re.compile('\d+')
+		for predictor in predictors_:
+			print(predictor)
+			match = (p.findall(predictor[1]))
+			if match != []:
+				self.lags = self.lags.append(int(match[0]))
+		self.lags = max(self.lags)
 
 	def addDependency(self, equation):
 		self.dependencies.append(equation)
@@ -113,30 +126,34 @@ class Equation(object):
 	#Turn it into a getter
 	def forecast(self, forecast_horizon, predictions=[]):
 		'''predictions must be a list of EconVariables'''
-		assumptions = []
-		for variable, transformation in self.predictors:
-			assumption = None
-			for prediction in predictions:
-				if prediction.columns[0] == variable.lvl.columns[0]:
-					assumption = prediction[-forecast_horizon:]
-			if assumption == None:
-				self.init_assumption(variable,forecast_horizon)
-				assumption = pandas.read_table('assumptions/'+variable.lvl.columns[0].replace('/','')+'.csv',sep=',',parse_dates=['Date'],index_col=0)
-				#assumption = assumption.resample(variable.lvl.index.freq,fill_method='ffill')
-				assumption = pandas.DataFrame({variable.lvl.columns[0] : numpy.append(variable.lvl.values,assumption.values)}, index = numpy.append(variable.lvl.index,assumption.index))
-				assumption.index.name = 'Date'
-				assumption = assumption.resample(variable.lvl.index.freq,fill_method='ffill')
-				assumption = EconVariable(assumption)
-			assumption = eval('assumption.'+transformation)
-			assumptions.append(assumption)
-		if len(assumptions) == 1:
-			assumptions_ = assumptions[0]
-		if len(assumptions) > 1:
-			assumptions_ = pandas.concat([assumptions[0],assumptions[1]],axis=1)
-		if len(assumptions) > 2:
-			for assumption in assumptions:
-				assumptions_ = pandas.concat([assumptions_,assumption],axis=1)
-		return self.reg.predict(self.reg.beta,assumptions_)
+		for i in range(-1,self.lags):
+			assumptions = []
+			for variable, transformation in self.predictors:
+				assumption = None
+				for prediction in predictions:
+					if prediction.columns[0] == variable.lvl.columns[0]:
+						assumption = prediction[-forecast_horizon:]
+				if assumption == None:
+					if variable.lvl.columns[0] != self.predicted.lvl.columns[0]:
+						self.init_assumption(variable,forecast_horizon)
+						assumption = pandas.read_table('assumptions/'+variable.lvl.columns[0].replace('/','')+'.csv',sep=',',parse_dates=['Date'],index_col=0)
+						#assumption = assumption.resample(variable.lvl.index.freq,fill_method='ffill')
+						assumption = pandas.DataFrame({variable.lvl.columns[0] : numpy.append(variable.lvl.values,assumption.values)}, index = numpy.append(variable.lvl.index,assumption.index))
+						assumption.index.name = 'Date'
+						assumption = assumption.resample(variable.lvl.index.freq,fill_method='ffill')
+						assumption = EconVariable(assumption)
+				assumption = eval('assumption.'+transformation)
+				assumptions.append(assumption)
+			if len(assumptions) == 1:
+				assumptions_ = assumptions[0]
+			if len(assumptions) > 1:
+				assumptions_ = pandas.concat([assumptions[0],assumptions[1]],axis=1)
+			if len(assumptions) > 2:
+				for assumption in assumptions:
+					assumptions_ = pandas.concat([assumptions_,assumption],axis=1)
+			prediction = self.reg.predict(self.reg.beta,assumptions_)
+			predictions = predictions.append(prediction)
+		return prediction
 
 class Node(object):
 	def __init__(self, name):
