@@ -1,8 +1,8 @@
 import dlstats
 import pandas
 import matplotlib.pyplot as plt
-from matplotlib.dates import *
-import datetime
+import matplotlib
+import monitoring
 
 gdp = dlstats.INSEE('001615899','GDP')
 gdp_mark = dlstats.INSEE('001615898','GDP')
@@ -61,8 +61,8 @@ gov_exp_col = dlstats.INSEE('001616556','Collective government expenditures')
 gov_exp_col_mark = dlstats.INSEE('001616555','Collective government expenditures')
 gov_exp = gov_exp_ind + gov_exp_col
 gov_exp_mark = gov_exp_ind_mark + gov_exp_col_mark
-private_consumption = household_consumption + non_profit_consumption
-private_consumption_mark = household_consumption_mark + non_profit_consumption_mark
+consumption = household_consumption + non_profit_consumption
+consumption_mark = household_consumption_mark + non_profit_consumption_mark
 imports = dlstats.INSEE('001615777','Imports')
 imports_mark = dlstats.INSEE('001615776','Imports')
 exports = dlstats.INSEE('001615785','Exports')
@@ -89,39 +89,62 @@ other_taxes_mark = dlstats.INSEE('001615155','Misc taxes')
 exp_subsidies_mark = dlstats.INSEE('001615371','Subsidies on exports')
 tax_prod_mark = dlstats.INSEE('001615108','Taxes on products')
 
-tax_minus_subsidies_mark = gdp_mark - agriculture_gva_mark  - industry_man_gva_mark - construction_gva_mark - services_gva_mark
-tax_minus_subsidies = gdp - agriculture_gva- industry_man_gva- construction_gva- services_gva
+tax_minus_subsidies = pandas.DataFrame(gdp.values - agriculture_gva.values - industry_man_gva.values - construction_gva.values - services_gva.values, index = gdp.index)
 
-agriculture_share = agriculture_gva/gdp
-industry_share = industry_gva/gdp
-industry_man_share = industry_man_gva/gdp
-construction_share = construction_gva/gdp
-services_share = services_gva/gdp
-tax_minus_subsidies_share = tax_minus_subsidies/gdp
+agriculture_share = pandas.DataFrame(agriculture_gva.values/gdp.values, index=gdp.index)
+industry_share = pandas.DataFrame(industry_gva.values/gdp.values, index=gdp.index)
+industry_man_share = pandas.DataFrame(industry_man_gva.values/gdp.values, index=gdp.index)
+construction_share = pandas.DataFrame(construction_gva.values/gdp.values, index=gdp.index)
+services_share = pandas.DataFrame(services_gva.values/gdp.values, index=gdp.index)
+tax_minus_subsidies_share = pandas.DataFrame(tax_minus_subsidies.values/gdp.values, index=gdp.index)
 
-contribution_agriculture_gva = agriculture_gva.pct_change()*100*agriculture_share
-contribution_industry_man_gva = industry_man_gva.pct_change()*100*industry_man_share
-contribution_construction_gva = construction_gva.pct_change()*100*construction_share
-contribution_services_gva = services_gva.pct_change()*100*services_share
-contribution_tax_minus_subsidies = tax_minus_subsidies.pct_change()*100*tax_minus_subsidies_share
+contribution_agriculture_gva = pandas.DataFrame(agriculture_gva.pct_change().values*100*agriculture_share.values,index = agriculture_share.index)
+contribution_industry_man_gva = pandas.DataFrame(industry_man_gva.pct_change().values*100*industry_man_share.values, index=industry_man_share.index)
+contribution_construction_gva = pandas.DataFrame(construction_gva.pct_change().values*100*construction_share.values, index=construction_share.index)
+contribution_services_gva = pandas.DataFrame(services_gva.pct_change().values*100*services_share.values, index=services_share.index)
+contribution_tax_minus_subsidies = pandas.DataFrame(tax_minus_subsidies.pct_change().values*100*tax_minus_subsidies_share.values, index=tax_minus_subsidies_share.index)
 
+contribution_tax_minus_subsidies.columns = ['Tax minus subsidies']
+contribution_services_gva.columns = ['Services']
+contribution_construction_gva.columns = ['Construction']
+contribution_industry_man_gva.columns = ['Industry']
+contribution_agriculture_gva.columns = ['Agriculture']
 
-gdp_components = pandas.concat([contribution_agriculture_gva,contribution_industry_man_gva,contribution_construction_gva,contribution_services_gva,contribution_tax_minus_subsidies,(gdp.pct_change()*100)],axis=1)
-gdp_components.columns = ['Agriculture','Industry','Construction','Services','Tax minus subsidies','GDP']
+gdp_components = pandas.concat([contribution_agriculture_gva,contribution_industry_man_gva,contribution_construction_gva,contribution_services_gva,contribution_tax_minus_subsidies,gdp.pct_change()],axis=1)
+#gdp_components.columns = ['Agriculture','Industry','Construction','Services','Tax minus subsidies','GDP']
 
 xticks = pandas.date_range(start=gdp_components.index[-64], end=gdp_components.index[-1], freq='Q-DEC')
 fig = plt.figure(1)
-ax = fig.add_subplot(211)
-gdpplot = (gdp.truncate(before='01/01/2006').pct_change()*100).plot(label='GDP', ax=ax)
-plt.legend()
-plt.xlabel('GDP growth')
 ax2 = fig.add_subplot(212)
-gdp_components[['Agriculture','Industry','Construction','Services','Tax minus subsidies']].truncate(before=gdp_components.index[-64]).plot(kind='bar', stacked=True, label=gdp_components.columns, ax=ax2, xticks=xticks.to_period())
-
+ax1 = fig.add_subplot(211)
+gdp_components[['Agriculture','Industry','Construction','Services','Tax minus subsidies']].truncate(before='01/01/2003').plot(kind='bar', stacked=True, ax=ax1)
+plt.ylabel('Contributions to GDP')
+plt.xlabel('')
 plt.legend()
-plt.xlabel('Contributions to GDP')
-#ax.xaxis.set_major_locator(AutoDateLocator())
-#ax.xaxis.set_major_formatter(DateFormatter('%Y-%m-%d'))
-#ax.xaxis.set_major_formatter(AutoDateFormatter())
-#plt.tight_layout()
-plt.show()
+gdpplot = (gdp.truncate(before='01/01/2003').pct_change()*100).plot(ax=ax2)
+plt.ylabel('GDP growth')
+plt.legend()
+plt.setp(ax1.get_xticklabels(), visible=False)
+plt.tight_layout()
+plt.savefig('gdp_contrib.png')
+
+gdp_ = monitoring.EconVariable(gdp)
+ip_ = monitoring.EconVariable(ip)
+industry_man_gva_ = monitoring.EconVariable(industry_man_gva)
+business_climate_industry_ = monitoring.EconVariable(business_climate_industry)
+business_climate_services_ = monitoring.EconVariable(business_climate_services)
+business_climate_construction_ = monitoring.EconVariable(business_climate_construction)
+business_climate_ = monitoring.EconVariable(business_climate)
+gfcf_ = monitoring.EconVariable(gfcf)
+imports_ = monitoring.EconVariable(imports)
+imports_m_ = monitoring.EconVariable(imports_m)
+imports_q_ = monitoring.EconVariable(imports_m.resample('Q', fill_method='ffill'))
+exports_ = monitoring.EconVariable(exports)
+exports_m_ = monitoring.EconVariable(exports_m)
+exports_q_ = monitoring.EconVariable(exports_m.resample('Q', fill_method='ffill'))
+consumption_ = monitoring.EconVariable(consumption)
+household_confidence_m_ = monitoring.EconVariable(household_confidence_m)
+consumption_goods_m_ = monitoring.EconVariable(consumption_goods_m)
+
+ind_m = monitoring.Equation([ip_,'yoy'],[[business_climate_industry_,'lvl'],[ip_,'yoy.shift(1)']],'Industry - Monthly Equation','%')
+ind_q = monitoring.Equation([industry_man_gva_,'yoy'],[[ip_,'yoy.resample("Q",how="mean")']],'Industry - Monthly Equation','%')
