@@ -73,7 +73,7 @@ class EconVariable(object):
 			return Equation(self.lvl.resample('Q',how='mean'))
 		else:
 			raise NotImplemented("Only monthly and quarterly data have been implemented")
-	def set_q(self)
+	def set_q(self):
 		raise NotImplemented("Do not input resampled data. It makes my mom cry.")
 	q = property(get_q,set_q)
 
