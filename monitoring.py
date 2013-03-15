@@ -66,6 +66,16 @@ class EconVariable(object):
 		else:
 			raise NotImplemented("Only monthly, quarterly and yearly data have been implemented")
 	an = property(get_an,set_an)
+	def get_q(self):
+		elif self.lvl.index.freqstr == 'Q' or 'Q-DEC':
+			return self
+		elif self.lvl.index.freqstr == 'M':
+			return Equation(self.lvl.resample('Q',how='mean'))
+		else:
+			raise NotImplemented("Only monthly and quarterly data have been implemented")
+	def set_q(self)
+		raise NotImplemented("Do not input resampled data. It makes my mom cry.")
+	q = property(get_q,set_q)
 
 
 class Equation(object):
