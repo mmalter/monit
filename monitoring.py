@@ -81,25 +81,19 @@ class Equation(object):
 		predictors = []
 		for predictor in predictors_:
 			predictors.append(eval('predictor[0].'+predictor[1]))
+		predictors
 		self.predictors_df = pandas.concat([predicted,predictors[0]],axis=1)
 		if len(predictors) > 1:
-			i = 3
 			for predictor in predictors[1:]:
-				print(self.predictors_df)
-				print('a')
-				print(predictor)
 				self.predictors_df = pandas.concat([self.predictors_df,predictor],axis=1)
-				i += 1
-		self.predictors_df.columns = [predicted.columns[0]]+[predictor[0].lvl.columns[0] for predictor in predictors_]
 		self.reg = pandas.ols(y=self.predictors_df.iloc[:,0],x=self.predictors_df.iloc[:,1:])
 		self.reg.true_x = self.predictors_df[self.predictors_df.columns[1:]]
 		self.lags = [0] 
 		p = re.compile('\d+')
 		for predictor in predictors_:
-			print(predictor)
 			match = (p.findall(predictor[1]))
 			if match != []:
-				self.lags = self.lags.append(int(match[0]))
+				self.lags.append(int(match[0]))
 		self.lags = max(self.lags)
 
 	def addDependency(self, equation):
