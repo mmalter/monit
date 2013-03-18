@@ -50,7 +50,7 @@ class EconVariable(object):
 	def get_an(self):
 		if self.lvl.index.freqstr == 'Y':
 			return self.lvl.pct_change(1)*100
-		elif self.lvl.index.freqstr == 'Q' or 'Q-DEC':
+		elif self.lvl.index.freqstr in ('Q', 'Q-DEC'):
 			return (((self.lvl.pct_change(1) + 1)**4)-1)*100
 		elif self.lvl.index.freqstr == 'M':
 			return (((self.lvl.pct_change(1) + 1)**12)-1)*100
@@ -59,7 +59,7 @@ class EconVariable(object):
 	def set_an(self, dataframe):
 		if self.lvl.index.freqstr == 'Y':
 			self.lvl = (dataframe / 100 + 1) * self.lvl.shift(1)
-		if self.lvl.index.freqstr == 'Q' or 'Q-DEC':
+		if self.lvl.index.freqstr in ('Q', 'Q-DEC'):
 			self.lvl = (((dataframe*100)+1)**(1/4) / 100 + 1) * self.lvl.shift(1)
 		elif self.lvl.index.freqstr == 'M':
 			self.lvl = (((dataframe*100)+1)**(1/12) / 100 + 1) * self.lvl.shift(1)
@@ -67,10 +67,10 @@ class EconVariable(object):
 			raise NotImplemented("Only monthly, quarterly and yearly data have been implemented")
 	an = property(get_an,set_an)
 	def get_q(self):
-		if self.lvl.index.freqstr == 'Q' or 'Q-DEC':
+		if self.lvl.index.freqstr in ('Q', 'Q-DEC'):
 			return self
 		elif self.lvl.index.freqstr == 'M':
-			return Equation(self.lvl.resample('Q',how='mean'))
+			return EconVariable(self.lvl.resample('Q',how='mean'))
 		else:
 			raise NotImplemented("Only monthly and quarterly data have been implemented")
 	def set_q(self):
@@ -81,16 +81,17 @@ class EconVariable(object):
 class Equation(object):
 	def __init__(self,predicted_,predictors_,title,unit,figname=None):
 		self.predicted = predicted_
-		'''A list of lists (EconVariable,transformation)'''
+		'''A list (EconVariable,transformation)'''
 		self.predictors = predictors_
-		'''A list of lists (EconVariable,transformation)'''
+		'''A list of lists (EconVariable,transformation,lag)'''
 		self.title = title
 		self.figname = figname
 		self.dependencies = []
+		self.predictions = []
 		predicted = eval('self.predicted[0].'+self.predicted[1])
 		predictors = []
 		for predictor in predictors_:
-			predictors.append(eval('predictor[0].'+predictor[1]))
+			predictors.append(eval('predictor[0].'+predictor[1]+'.shift('+str(predictor[2])+')'))
 		predictors
 		self.predictors_df = pandas.concat([predicted,predictors[0]],axis=1)
 		if len(predictors) > 1:
@@ -116,11 +117,11 @@ class Equation(object):
 		except IOError as e:
 			print('Initializing '+variable.lvl.columns[0])
 			if variable.lvl.index.freq == 'Q-DEC':
-				period = variable.lvl.index.to_period()+forecast_horizon
+				period = variable.lvl.index.to_period()+forecast_horizon/3
 				timestamp = period.to_timestamp(how='end')
 				timestamp =  timestamp[-4:]
 			if variable.lvl.index.freq == 'M':
-				period = variable.lvl.index.to_period()+forecast_horizon*3
+				period = variable.lvl.index.to_period()+forecast_horizon
 				timestamp = period.to_timestamp(how='end')
 				timestamp =  timestamp[-12:]
 			assumption = pandas.DataFrame(index=timestamp,columns = [variable.lvl.columns])
@@ -129,24 +130,59 @@ class Equation(object):
 	
 	#Turn it into a getter
 	def forecast(self, forecast_horizon, predictions=[]):
+		forecast_horizon_ = forecast_horizon
+		if self.predicted[0].lvl.index.freqstr == 'Q':
+			forecast_horizon_ = forecast_horizon_/3
 		'''predictions must be a list of EconVariables'''
-		for i in range(-1,self.lags):
+		#print('predictions')
+		#print(predictions)
+		for i in range(-1,forecast_horizon_-1):
 			assumptions = []
-			for variable, transformation in self.predictors:
+			for variable, transformation, lags in self.predictors:
 				assumption = None
-				for prediction in predictions:
+				for prediction in self.predictions:
 					if prediction.columns[0] == variable.lvl.columns[0]:
-						assumption = prediction[-forecast_horizon:]
-				if assumption == None:
-					if variable.lvl.columns[0] != self.predicted.lvl.columns[0]:
+						#The problem is that the variable_ is transformed before so the assumption doesn't get pushed by the lag. We should detect the lag.
+						print('A1')
+						variable_ = eval('variable.'+transformation+'.shift('+str(lags)+', freq="'+variable.lvl.index.freqstr+'")')
+						print('variable_.tail(15)')
+						print(variable_.tail(15))
+						#assumption = prediction[-forecast_horizon_-j:-j].shift(lags, freq=prediction.index.freqstr)
+						assumption = prediction[-forecast_horizon_:].shift(lags, freq=prediction.index.freqstr)
+						print('A1assum')
+						print(assumption)
+						assumption = pandas.DataFrame({variable_.columns[0] : numpy.append(variable_.values,assumption.values)}, index = numpy.append(variable_.index,assumption.index))
+						#print(assumption.tail(15))
+						assumption.index.name = 'Date'
+						assumption = assumption.resample(variable.lvl.index.freq,fill_method=None)
+						period = self.predicted[0].lvl.index.to_period()+forecast_horizon_
+						timestamp = period.to_timestamp(how='end')
+						assumption = assumption.truncate(after=timestamp[-1])
+						print('assumption.tail(15)')
+						print(assumption.tail(15))
+						#assumption = EconVariable(assumption)
+						#print(assumption.tail(15))
+				if type(assumption) != pandas.core.frame.DataFrame:
+					if variable.lvl.columns[0] != self.predicted[0].lvl.columns[0]:
+						print('A2')
 						self.init_assumption(variable,forecast_horizon)
 						assumption = pandas.read_table('assumptions/'+variable.lvl.columns[0].replace('/','')+'.csv',sep=',',parse_dates=['Date'],index_col=0)
-						#assumption = assumption.resample(variable.lvl.index.freq,fill_method='ffill')
 						assumption = pandas.DataFrame({variable.lvl.columns[0] : numpy.append(variable.lvl.values,assumption.values)}, index = numpy.append(variable.lvl.index,assumption.index))
 						assumption.index.name = 'Date'
 						assumption = assumption.resample(variable.lvl.index.freq,fill_method='ffill')
+						period = self.predicted[0].lvl.index.to_period()+forecast_horizon_
+						timestamp = period.to_timestamp(how='end')
+						assumption = assumption.truncate(after=timestamp[-1])
 						assumption = EconVariable(assumption)
-				assumption = eval('assumption.'+transformation)
+						assumption = eval('assumption.'+transformation+'.shift('+str(lags)+')')
+					else:
+						assumption = variable.lvl
+						print('A3')
+						period = self.predicted[0].lvl.index.to_period()+forecast_horizon_
+						timestamp = period.to_timestamp(how='end')
+						assumption = assumption.truncate(after=timestamp[-1])
+						assumption = EconVariable(assumption)
+						assumption = eval('assumption.'+transformation+'.shift('+str(lags)+', freq="'+assumption.lvl.index.freqstr+'")')
 				assumptions.append(assumption)
 			if len(assumptions) == 1:
 				assumptions_ = assumptions[0]
@@ -155,8 +191,13 @@ class Equation(object):
 			if len(assumptions) > 2:
 				for assumption in assumptions:
 					assumptions_ = pandas.concat([assumptions_,assumption],axis=1)
+			print(assumptions_.tail(15))
+			self.predictions = []
 			prediction = self.reg.predict(self.reg.beta,assumptions_)
-			predictions = predictions.append(prediction)
+			prediction = pandas.DataFrame(prediction,index=prediction.index, columns=self.predicted[0].lvl.columns)
+			print(prediction.tail(16))
+			self.predictions.append(prediction)
+			print(self.predictions)
 		return prediction
 
 class Node(object):
@@ -194,7 +235,9 @@ class Model(object):
 		self.dep_resolv(equation)
 		self.predictions = []
 		for equation_ in self.resolved:
-			self.prediction.append([equation_,equation_.forecast(4),self.predictions])
+			self.predictions.append([equation_,equation_.forecast(12),self.predictions])
+			#for foo in self.predictions:
+				#print(foo[1].tail(12))
 		return self.predictions
 
 	def report():
