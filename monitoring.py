@@ -1,7 +1,22 @@
 import pandas
+import random
 import numpy
 import re
-import pdb
+import logging
+import matplotlib
+import matplotlib.pyplot as plt
+from mako.template import Template
+
+lgr = logging.getLogger('monitoring')
+lgr.setLevel(logging.DEBUG)
+
+fh = logging.FileHandler('monitoring.log')
+fh.setLevel(logging.WARNING)
+
+frmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(frmt)
+
+lgr.addHandler(fh)
 
 class EconVariable(object):
 # I'm not subclassing pandas.DataFrame because  pandas often relies
@@ -19,6 +34,9 @@ class EconVariable(object):
 	def set_mom(self, dataframe):
 		if self.lvl.index.freqstr == 'M':
 			self.lvl = (dataframe / 100 + 1) * self.lvl.shift(1, freq='M')
+			nan_count = 1 + len(self.lvl.values) - len(self.lvl.dropna().values)
+			for i in range(nan_count):
+				self.lvl = (dataframe / 100 + 1) * self.lvl.shift(1, freq='M')
 		else:
 			raise TypeError(
 					"Month on Month growth rates are only "
@@ -33,7 +51,9 @@ class EconVariable(object):
 					"for data with quarterly frequencies")
 	def set_qoq(self, dataframe):
 		if self.lvl.index.freqstr in ('Q', 'Q-DEC'):
-			self.lvl = (dataframe / 100 + 1) * self.lvl.shift(1, freq='Q-DEC')
+			nan_count = 1 + len(dataframe.values) - len(dataframe.dropna().values) + 9
+			for i in range(nan_count):
+				self.lvl = (dataframe / 100 + 1) * self.lvl.shift(1, freq='Q-DEC')
 		else:
 			raise TypeError(
 					"Quarter on quarter growth rates are only "
@@ -52,10 +72,13 @@ class EconVariable(object):
 					"have been implemented")
 	def set_yoy(self, dataframe):
 		if self.lvl.index.freqstr in ('Y', 'Y-DEC'):
+			nan_count = 1 + len(dataframe.values) - len(dataframe.dropna().values)
 			self.lvl = (dataframe / 100 + 1) * self.lvl.shift(1, freq='Y-DEC')
 		if self.lvl.index.freqstr in ('Q', 'Q-DEC'):
+			nan_count = 1 + len(dataframe.values) - len(dataframe.dropna().values)
 			self.lvl = ((dataframe / 100) + 1) * self.lvl.shift(4, freq='Q-DEC')
 		elif self.lvl.index.freqstr == 'M':
+			nan_count = 1 + len(dataframe.values) - len(dataframe.dropna().values)
 			self.lvl = (dataframe / 100 + 1) * self.lvl.shift(12, freq='M')
 		else:
 			raise NotImplemented(
@@ -75,13 +98,19 @@ class EconVariable(object):
 					"have been implemented")
 	def set_an(self, dataframe):
 		if self.lvl.index.freqstr in ('Y', 'Y-DEC'):
-			self.lvl = (dataframe / 100 + 1) * self.lvl.shift(1, freq='Y-DEC')
+			nan_count = 1 + len(dataframe.values) - len(dataframe.dropna().values)
+			for i in range(nan_count):
+				self.lvl = (dataframe / 100 + 1) * self.lvl.shift(1, freq='Y-DEC')
 		if self.lvl.index.freqstr in ('Q', 'Q-DEC'):
-			self.lvl = ((((dataframe*100)+1)**(1/4) / 100 + 1)
-					* self.lvl.shift(1, freq='Q-DEC'))
+			nan_count = 1 + len(dataframe.values) - len(dataframe.dropna().values)
+			for i in range(nan_count):
+				self.lvl = ((((dataframe*100)+1)**(1/4) / 100 + 1)
+						* self.lvl.shift(1, freq='Q-DEC'))
 		elif self.lvl.index.freqstr == 'M':
-			self.lvl = ((((dataframe*100)+1)**(1/12) / 100 + 1) 
-					* self.lvl.shift(1, freq='Q-DEC'))
+			nan_count = 1 + len(dataframe.values) - len(dataframe.dropna().values)
+			for i in range(nan_count):
+				self.lvl = ((((dataframe*100)+1)**(1/12) / 100 + 1) 
+						* self.lvl.shift(1, freq='Q-DEC'))
 		else:
 			raise NotImplemented(
 					"Only monthly, quarterly and yearly data "
@@ -106,26 +135,38 @@ class _coefficients(object):
 
 class Equation(object):
 	def __init__(self,predicted_,predictors_,
-			title,unit,figname=None,coefficients=None):
+		title,unit,comment=None,reg_comment=None,
+		figname=str(random.randint(0,999999999999))+'.png',coefficients=None):
+		self.comment = comment
 		self.predicted = predicted_
 		'''A list (EconVariable,transformation)'''
 		self.predictors = predictors_
 		'''A list of lists (EconVariable,transformation,lag)'''
 		self.title = title
+		self.unit = unit
 		self.figname = figname
 		self.dependencies = []
 		self.predictions = []
+		self.reg_comment = reg_comment
 		self.reg = _coefficients()
+		self.ols = False
 		predicted = eval('self.predicted[0].'+self.predicted[1])
 		predictors = []
 		if coefficients != None:
-			data_beta = {}
+			self.reg.beta = pandas.Series()
 			i = 0
+			lgr.debug('coef %s', coefficients)
 			for predictor in self.predictors:
+				data_beta = {}
 				data_beta[predictor[0].lvl.columns[0]] = coefficients[i]
+				data_beta = pandas.Series(data_beta)
+				self.reg.beta = self.reg.beta.append(data_beta)
 				i += 1
+			data_beta = {}
 			data_beta['intercept'] = 0
-			self.reg.beta = pandas.Series(data_beta)
+			data_beta = pandas.Series(data_beta)
+			self.reg.beta = self.reg.beta.append(data_beta)
+			lgr.debug('beta %s', self.reg.beta)
 		else:
 			for predictor in self.predictors:
 				predictors.append(
@@ -141,6 +182,16 @@ class Equation(object):
 					y=self.predictors_df.iloc[:,0],
 					x=self.predictors_df.iloc[:,1:])
 			self.reg.true_x = self.predictors_df[self.predictors_df.columns[1:]]
+			self.ols = True
+			fig = plt.figure()
+			ax1 = fig.add_subplot(111)
+			graph = self.reg.y.plot(colors='b',label='Actual')
+			graph = self.reg.y_fitted.plot(colors='r',label='Fitted')
+			plt.legend(loc='best')
+			plt.title(self.title+' - Actual vs fitted')
+			plt.ylabel(self.unit)
+			plt.savefig(self.figname+'_actualvsfitted.eps')
+
 		self.lags = [0] 
 		p = re.compile('\d+')
 		for predictor in predictors_:
@@ -154,16 +205,16 @@ class Equation(object):
 
 	def init_assumption(self,variable,end):
 		# Taking the date of the end of the forecast is a better
-		# option than asking for than asking for the forecast
-		# horizon. We would end up with too large date ranges for
-		# indicator that are released earlier.
+		# option than asking for the forecast horizon. We would 
+        # end up with too large date ranges for indicator that 
+        # are released earlier.
 		try:
 			with open(
 					'assumptions/'+
 					variable.lvl.columns[0].replace('/','')+
 					'.csv') as f: pass
 		except IOError as e:
-			print('Initializing '+variable.lvl.columns[0])
+			lgr.info('Initializing %s', variable.lvl.columns[0])
 			period = pandas.period_range(
 					variable.lvl.index.to_period()[-1],
 					end.to_period(),
@@ -179,6 +230,7 @@ class Equation(object):
 	
 	#Turn it into a getter
 	def forecast(self, forecast_horizon, predictions=[]):
+		lgr.info('Forecasting %s', self.predicted[0].lvl.columns[0])
 		forecast_horizon_ = forecast_horizon
 		if self.predicted[0].lvl.index.freqstr in ('Q', 'Q-DEC'):
 			forecast_horizon_ = int(forecast_horizon/3)
@@ -186,18 +238,21 @@ class Equation(object):
 		timestamp = period.to_timestamp(how='end')
 		start = timestamp[-forecast_horizon_]
 		end = timestamp[-1]
+		lgr.info('Number of periods to forecast : %s', forecast_horizon_)
+		lgr.info('End of the forecast : %s', end)
 		'''predictions must be a list of EconVariables'''
 		self.predictions_ = predictions
-		assumptions_csv = []
-		print(forecast_horizon_)
-		for i in range(-1,forecast_horizon_-1):
+		lgr.info('Predictions provided : %s', [x.lvl.tail(24) for x in self.predictions_])
+		for i in range(-1,forecast_horizon_):
+			assumptions_csv = []
 			assumptions = []
 			for variable, transformation, lags in self.predictors:
+				lgr.info('Assumptions for : %s', variable.lvl.columns[0])
 				assumption = None
 				for prediction in self.predictions_:
-					print('A')
+					lgr.info('Inspecting available predictions')
 					if prediction.lvl.columns[0] == variable.lvl.columns[0]:
-						print('A1')
+						lgr.info('Prediction found')
 						variable_ = eval(
 								'variable.'+
 								transformation+
@@ -224,33 +279,39 @@ class Equation(object):
 								fill_method=None)
 						assumption = assumption.truncate(after=end)
 				if type(assumption) != pandas.core.frame.DataFrame:
+					lgr.info('Prediction not found')
 					if (variable.lvl.columns[0] 
 							!= self.predicted[0].lvl.columns[0]):
-						print('A2')
+						lgr.debug('The predicted variable is different from the predictor.')
 						self.init_assumption(variable,end)
 						assumption = pandas.read_table(
 								'assumptions/'+
 								variable.lvl.columns[0].replace('/','')+
 								'.csv',
 								sep=',',parse_dates=['Date'],index_col=0)
+						assumption = assumption.resample(
+								eval('variable.'+transformation+'.index.freqstr'),
+								fill_method=None)
+						assumption = EconVariable(assumption)
+						start_ass = assumption.lvl.index[0]
 						assumption = pandas.DataFrame(
 								{variable.lvl.columns[0] : numpy.append(
-									variable.lvl.values,assumption.values)},
+									eval('variable.lvl.values'),eval('assumption.lvl.values'))},
 								index = numpy.append(
-									eval('variable.'+transformation+'.index'),assumption.index))
+									eval('variable.lvl.index'),eval('assumption.lvl.index')))
 						assumption.index.name = 'Date'
 						assumption = assumption.resample(
-								eval('variable.'+transformation+'.index.freq'),
+								eval('variable.'+transformation+'.index.freqstr'),
 								fill_method=None)
-						assumption = assumption.truncate(after=end)
 						assumption = EconVariable(assumption)
+						assumptions_csv.append([assumption,start_ass])
 						assumption = eval(
 								'assumption.'+
 								transformation+
 								'.shift('+str(lags)+')')
-						assumptions_csv.append(assumption)
+						assumption = assumption.truncate(after=end)
 					else:
-						print('A3')
+						lgr.debug('The predictor is a transformed version of the predicted variable.')
 						assumption = variable.lvl
 						assumption = assumption.truncate(after=end)
 						assumption = EconVariable(assumption)
@@ -271,17 +332,14 @@ class Equation(object):
 				for assumption in assumptions[2:]:
 					assumptions_ = pandas.concat(
 							[assumptions_,assumption],axis=1)
+			lgr.debug('Assumptions : %s', assumptions_.tail(24))
 			prediction = pandas.DataFrame([self.reg.beta.values[-1] for i in range(len(assumptions_.index))],index=assumptions_.index)
 			prediction.columns = self.predicted[0].lvl.columns
-			print('inter')
-			print(prediction.tail())
-			print(self.reg.beta.values)
+			lgr.debug('Coefficients : %s',  self.reg.beta.values)
 			for i in range(0,len(self.reg.beta)-1):
 				prediction = prediction + self.reg.beta.values[i] * assumptions_.iloc[:,i]
-				print(i)
-				print(self.reg.beta.values[i])
-				print(assumptions_.iloc[:,i-1].tail(20))
-				print(prediction.tail(24))
+				lgr.debug('Predictor %s', i+1)
+				lgr.debug('Prediction %s', prediction.tail(24))
 			#prediction = self.reg.predict(self.reg.beta,assumptions_)
 			prediction = pandas.DataFrame(
 					prediction,index=prediction.index,
@@ -299,24 +357,43 @@ class Equation(object):
 			prediction = prediction.resample(
 					self.predicted[0].lvl.index.freqstr, fill_method=None)
 			prediction_ = EconVariable(self.predicted[0].lvl)
-			print('assumptions')
-			print(assumptions_.tail(24))
-			print('prediction')
-			print(prediction.tail(24))
 			exec('prediction_.'+self.predicted[1]+' = prediction')
 			for i in range(len(self.predictions_)):
 				if self.predictions_[i].lvl.columns[0] == prediction_.lvl.columns[0]:
 					del self.predictions_[i]
 			self.predictions_.append(prediction_)
-		#return prediction,assumptions_,assumptions_csv
-		return prediction_
+			lgr.debug('Intermediate prediction %s', prediction.tail(24))
+			lgr.debug('Intermediate predictions lvl %s', [pred.lvl.tail(24) for pred in self.predictions_])
+			#À ce stade je ne l'ai plus
+		lgr.debug('Final prediction %s', prediction_.lvl.tail(24))
+		if self.figname != None:
+			fig = plt.figure()
+			ax1 = fig.add_subplot(111)
+			graph = eval('prediction_.'+self.predicted[1]+'.truncate(before=eval("self.predicted[0]."+self.predicted[1]+".index.values[-12]")).dropna().plot(ax=ax1)')
+			ax1.axvline(x=start)
+			plt.title(self.title+' - Forecast')
+			plt.ylabel(self.unit)
+			plt.savefig(self.figname+'_forecast.eps')
+
+			i = 0
+			for assum in assumptions_csv:
+				fig = plt.figure()
+				ax1 = fig.add_subplot(111)
+				graph = eval('assum[0].'+self.predicted[1]+'.truncate(before=eval("self.predicted[0]."+self.predicted[1]+".index.values[-12]")).dropna().plot(ax=ax1)')
+				ax1.axvline(x=assum[1])
+				plt.title(self.title+' - Assumption')
+				plt.ylabel(self.unit)
+				plt.savefig(self.figname+'_assumption'+str(i)+'.eps')
+				i += 1
+		return (prediction_,self.figname,assumptions_csv,self.comment)
 
 class Node(object):
 	def __init__(self, name):
 		self.name = name
 
 class Model(object):	
-	def __init__(self,equations):
+	def __init__(self,equations,title):
+		self.title = title
 		self.unresolved = []
 		self.resolved = []
 		self.equations = []
@@ -339,7 +416,7 @@ class Model(object):
 		for dependency in equation.dependencies:
 			if dependency not in self.resolved:
 				if dependency in self.unresolved:
-					raise Exception('Circular dependence found')
+					raise Exception('Circular dependency found')
 				self.dep_resolv(dependency)
 		self.resolved.append(equation)		
 		self.unresolved.remove(equation)
@@ -347,28 +424,28 @@ class Model(object):
 	def solve(self,equation):
 		self.unresolved = []
 		self.resolved = []
-		self.equations = []
 		self.hypothesis = []
 		self.predictions = []
+		self.predictions__ = []
 		self.dep_resolv(equation)
 		for equation_ in self.resolved:
-			self.predictions.append(
-					[equation_,equation_.forecast(12)])
-		return self.predictions
+			fct,fig,ass,com = equation_.forecast(12,self.predictions)
+			self.predictions.append(fct)
+			self.predictions__.append([fct,fig,ass,com])
+		pred_ = []
+		i = 1
+		return self.predictions__
 
-	def report():
-		print('TODO')
+	def report(self,filename,template,my_solve_object):
+		mytemplate = Template(filename=template,input_encoding="utf-8")
+		tex_report = mytemplate.render(title=self.title,solve_object=my_solve_object)
+		f = open(filename+'.tex', 'wb')
+		f.write(tex_report.encode('utf-8'))
+
+	def document(self,filename,template):
+		mytemplate = Template(filename=template,input_encoding="utf-8")
+		tex_report = mytemplate.render(title=self.title,model=self)
+		f = open(filename+'.tex', 'wb')
+		f.write(tex_report.encode('utf-8'))
 
 
-
-
-
-
-		#if figname != None:
-			#fig = plt.figure()
-			#actual_vs_fitted = pandas.concat([self.reg.y,self.reg.y_fitted],axis=1)
-			#actual_vs_fitted.columns = ['actual','fitted']
-			#graph = pandas.DataFrame.plot(actual_vs_fitted)
-			#plt.title(title+' - Actual vs fitted')
-			#plt.ylabel(unit)
-			#plt.savefig(figname)

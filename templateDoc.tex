@@ -1,0 +1,30 @@
+\documentclass{article}
+\usepackage[hyphens]{url}
+\usepackage{amsmath}
+\usepackage{breqn}
+\usepackage{graphicx}
+\usepackage{placeins}
+\usepackage{geometry}
+\geometry{margin=60pt}
+
+\begin{document}
+\title{${title}}
+\author{Michael Malter}
+\maketitle
+%for equation in model.equations:
+	% if equation.ols == True:
+		\section{${equation.title}}
+		% if equation.reg_comment != None:
+			${equation.reg_comment}
+		%endif
+		\begin{verbatim}
+		${equation.reg.summary}
+		\end{verbatim}
+		\begin{figure}[!ht]
+		\includegraphics[scale=0.69]{${equation.figname+'_actualvsfitted.eps'}}
+		\end{figure}
+		\FloatBarrier
+	%endif
+%endfor
+
+\end{document}

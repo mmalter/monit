@@ -1,0 +1,50 @@
+\documentclass{article}
+\usepackage[hyphens]{url}
+\usepackage{amsmath}
+\usepackage{breqn}
+\usepackage{graphicx}
+\usepackage{placeins}
+
+\begin{document}
+\title{${title}}
+\author{Michael Malter}
+\maketitle
+\section{Results}
+\begin{table}[!htb]
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+&Q4 &Q1 &Q2 &Q3 &Q4${'\\'}${'\\'}
+\hline
+% for equation in solve_object:
+${equation[0].lvl.columns[0]} & ${'%.2f' % equation[0].an.dropna().values[-5][0]} &  ${'%.2f' % equation[0].an.dropna().values[-4][0]} & ${'%.2f' % equation[0].an.dropna().values[-3][0]} & ${'%.2f' % equation[0].an.dropna().values[-2][0]} & ${'%.2f' % equation[0].an.dropna().values[-1][0]} ${'\\'}${'\\'}\hline
+% endfor
+% for equation in solve_object[-1][2]:
+ ${equation[0].lvl.columns[0]} & ${'%.2f' % equation[0].an.dropna().values[-5][0]} &  ${'%.2f' % equation[0].an.dropna().values[-4][0]} & ${'%.2f' % equation[0].an.dropna().values[-3][0]} & ${'%.2f' % equation[0].an.dropna().values[-2][0]} & ${'%.2f' % equation[0].an.dropna().values[-1][0]} ${'\\'}${'\\'}\hline
+% endfor
+\end{tabular}
+\end{table}
+\FloatBarrier
+\section{Components}
+%for equation in solve_object[:-1]:
+	\subsection{${equation[0].lvl.columns[0]}}
+	\begin{figure}[!ht]
+	\includegraphics[scale=0.69]{${equation[1]+'_forecast.eps'}}
+	\end{figure}
+	\FloatBarrier
+	% if equation[3] != None:
+		\subsubsection{Comments}
+		\input{${equation[3]}}
+		\FloatBarrier
+	%endif
+	<% i = 0 %>
+	%for assumption in equation[2]:
+		\subsubsection{Assumptions}
+		\begin{figure}[!ht]
+		\includegraphics[scale=0.69]{${equation[1]+'_assumption'+str(i)+'.eps'}}
+		\end{figure}
+		\FloatBarrier
+		<% i += 1 %>
+	%endfor
+%endfor
+
+\end{document}

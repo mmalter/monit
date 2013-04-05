@@ -1,0 +1,21 @@
+This is pdfTeX, Version 3.1415926-2.3-1.40.12 (TeX Live 2011) (format=latex 2013.2.20)  28 MAR 2013 16:51
+entering extended mode
+ restricted \write18 enabled.
+ %&-line parsing enabled.
+**demand_side.tex
+
+! Emergency stop.
+<*> demand_side.tex
+                   
+End of file on the terminal!
+
+ 
+Here is how much of TeX's memory you used:
+ 3 strings out of 494763
+ 105 string characters out of 3177056
+ 47757 words of memory out of 3000000
+ 3303 multiletter control sequences out of 15000+200000
+ 3640 words of font info for 14 fonts, out of 3000000 for 9000
+ 220 hyphenation exceptions out of 8191
+ 0i,0n,0p,18b,6s stack positions out of 5000i,500n,10000p,200000b,50000s
+No pages of output.
