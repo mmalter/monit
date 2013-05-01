@@ -3,6 +3,7 @@ import random
 import numpy
 import re
 import logging
+import datetime
 import matplotlib
 import matplotlib.pyplot as plt
 from mako.template import Template
@@ -399,6 +400,8 @@ class Model(object):
 		self.equations = []
 		self.hypothesis = []
 		self.predictions = []
+		now = datetime.datetime.now()
+		self.now = now.strftime("%Y-%m-%d_%HM%M")
 		for equation in equations:
 			equation.dependencies = []
 			for predictor in equation.predictors:
@@ -439,13 +442,13 @@ class Model(object):
 	def report(self,filename,template,my_solve_object):
 		mytemplate = Template(filename=template,input_encoding="utf-8")
 		tex_report = mytemplate.render(title=self.title,solve_object=my_solve_object)
-		f = open(filename+'.tex', 'wb')
+		f = open(filename+self.now+'.tex', 'wb')
 		f.write(tex_report.encode('utf-8'))
 
 	def document(self,filename,template):
 		mytemplate = Template(filename=template,input_encoding="utf-8")
 		tex_report = mytemplate.render(title=self.title,model=self)
-		f = open(filename+'.tex', 'wb')
+		f = open(filename+self.now+'.tex', 'wb')
 		f.write(tex_report.encode('utf-8'))
 
 
