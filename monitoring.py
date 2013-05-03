@@ -12,7 +12,7 @@ lgr = logging.getLogger('monitoring')
 lgr.setLevel(logging.DEBUG)
 
 fh = logging.FileHandler('monitoring.log')
-fh.setLevel(logging.WARNING)
+fh.setLevel(logging.DEBUG)
 
 frmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(frmt)
@@ -272,8 +272,7 @@ class Equation(object):
 								{variable_.columns[0] : 
 									numpy.append(variable_.values,
 										assumption.values)},
-									index = numpy.append(variable_.index,
-										assumption.index))
+									index = variable_.index.append(assumption.index))
 						assumption.index.name = 'Date'
 						assumption = assumption.resample(
 								eval('variable.'+transformation+'.index.freq'),
@@ -295,16 +294,19 @@ class Equation(object):
 								fill_method=None)
 						assumption = EconVariable(assumption)
 						start_ass = assumption.lvl.index[0]
+						lgr.info('PH : %s', assumption.lvl.tail(24))
 						assumption = pandas.DataFrame(
 								{variable.lvl.columns[0] : numpy.append(
 									eval('variable.lvl.values'),eval('assumption.lvl.values'))},
-								index = numpy.append(
-									eval('variable.lvl.index'),eval('assumption.lvl.index')))
+								#index = numpy.append(
+									#eval('variable.lvl.index'),eval('assumption.lvl.index')))
+								index =	variable.lvl.index.append(assumption.lvl.index))
 						assumption.index.name = 'Date'
 						assumption = assumption.resample(
 								eval('variable.'+transformation+'.index.freqstr'),
 								fill_method=None)
 						assumption = EconVariable(assumption)
+						lgr.info('PH2 : %s', assumption.lvl.tail(24))
 						assumptions_csv.append([assumption,start_ass])
 						assumption = eval(
 								'assumption.'+
@@ -348,13 +350,16 @@ class Equation(object):
 			prediction = prediction.truncate(
 					before=timestamp[-forecast_horizon_],
 					after=timestamp[-1])
+			lgr.debug('ICH BIN AUFGEREGT! %s', prediction.tail(24))
 			prediction = pandas.DataFrame(
 					{prediction.columns[0] : numpy.append(
 						eval('self.predicted[0].'+self.predicted[1]+'.values'),
 						prediction.values)},
-					index=numpy.append(
-						eval('self.predicted[0].'+self.predicted[1]+'.index'),
-						prediction.index))
+					#index=numpy.append(
+						#eval('self.predicted[0].'+self.predicted[1]+'.index'),
+						#prediction.index))
+					index=eval('self.predicted[0].'+self.predicted[1]+'.index.append(prediction.index)'))
+			lgr.debug('ICH BIN ENTAUSCHT! %s', prediction.tail(24))
 			prediction = prediction.resample(
 					self.predicted[0].lvl.index.freqstr, fill_method=None)
 			prediction_ = EconVariable(self.predicted[0].lvl)
@@ -370,7 +375,7 @@ class Equation(object):
 		if self.figname != None:
 			fig = plt.figure()
 			ax1 = fig.add_subplot(111)
-			graph = eval('prediction_.'+self.predicted[1]+'.truncate(before=eval("self.predicted[0]."+self.predicted[1]+".index.values[-12]")).dropna().plot(ax=ax1)')
+			graph = eval('prediction_.'+self.predicted[1]+'.truncate(before=eval("self.predicted[0]."+self.predicted[1]+".index[-12]")).dropna().plot(ax=ax1)')
 			ax1.axvline(x=start)
 			plt.title(self.title+' - Forecast')
 			plt.ylabel(self.unit)
@@ -380,7 +385,7 @@ class Equation(object):
 			for assum in assumptions_csv:
 				fig = plt.figure()
 				ax1 = fig.add_subplot(111)
-				graph = eval('assum[0].'+self.predicted[1]+'.truncate(before=eval("self.predicted[0]."+self.predicted[1]+".index.values[-12]")).dropna().plot(ax=ax1)')
+				graph = eval('assum[0].'+self.predicted[1]+'.truncate(before=eval("self.predicted[0]."+self.predicted[1]+".index[-12]")).dropna().plot(ax=ax1)')
 				ax1.axvline(x=assum[1])
 				plt.title(self.title+' - Assumption')
 				plt.ylabel(self.unit)
