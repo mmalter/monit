@@ -6,7 +6,18 @@ import logging
 import datetime
 import matplotlib
 import matplotlib.pyplot as plt
+import os
 from mako.template import Template
+
+HOME = os.path.expanduser('~')
+DOTFOLDER = HOME + '/.monit'
+
+if not os.path.exists(DOTFOLDER):
+	os.makedirs(DOTFOLDER)
+
+OUTPUTFOLDER = 'output'
+if not os.path.exists(OUTPUTFOLDER):
+	os.makedirs(OUTPUTFOLDER)
 
 lgr = logging.getLogger('monitoring')
 lgr.setLevel(logging.DEBUG)
@@ -406,7 +417,9 @@ class Model(object):
 		self.hypothesis = []
 		self.predictions = []
 		now = datetime.datetime.now()
-		self.now = now.strftime("%Y-%m-%d_%HM%M")
+		self.now = now.strftime("%Y-%m-%d_%H%M")
+		if not os.path.exists(DOTFOLDER):
+			os.makedirs(DOTFOLDER)
 		for equation in equations:
 			equation.dependencies = []
 			for predictor in equation.predictors:
@@ -447,13 +460,13 @@ class Model(object):
 	def report(self,filename,template,my_solve_object):
 		mytemplate = Template(filename=template,input_encoding="utf-8")
 		tex_report = mytemplate.render(title=self.title,solve_object=my_solve_object)
-		f = open(filename+self.now+'.tex', 'wb')
+		f = open(OUTPUTFOLDER+filename+self.now+'.tex', 'wb')
 		f.write(tex_report.encode('utf-8'))
 
 	def document(self,filename,template):
 		mytemplate = Template(filename=template,input_encoding="utf-8")
 		tex_report = mytemplate.render(title=self.title,model=self)
-		f = open(filename+self.now+'.tex', 'wb')
+		f = open(OUTPUTFOLDER+filename+self.now+'.tex', 'wb')
 		f.write(tex_report.encode('utf-8'))
 
 
