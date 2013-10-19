@@ -305,19 +305,22 @@ class Equation(object):
 								fill_method=None)
 						assumption = EconVariable(assumption)
 						start_ass = assumption.lvl.index[0]
-						lgr.info('PH : %s', assumption.lvl.tail(24))
 						assumption = pandas.DataFrame(
 								{variable.lvl.columns[0] : numpy.append(
 									eval('variable.lvl.values'),eval('assumption.lvl.values'))},
-								#index = numpy.append(
-									#eval('variable.lvl.index'),eval('assumption.lvl.index')))
 								index =	variable.lvl.index.append(assumption.lvl.index))
 						assumption.index.name = 'Date'
 						assumption = assumption.resample(
 								eval('variable.'+transformation+'.index.freqstr'),
 								fill_method=None)
+                        dates = pandas.date_range(asumption.index.values[0],
+                                                  assumption.index.values[-1],
+                                                  freq=self.predicted[0].lvl.index.freqstr)
+                        name = assumption.columns[0]
+                        assumption = pandas.DataFrame(assumption.values,
+                                                      index.dates)
+                        assumption.columns = [name]
 						assumption = EconVariable(assumption)
-						lgr.info('PH2 : %s', assumption.lvl.tail(24))
 						assumptions_csv.append([assumption,start_ass])
 						assumption = eval(
 								'assumption.'+
@@ -335,6 +338,16 @@ class Equation(object):
 								'.shift('+str(lags)+
 								', freq="'+assumption.lvl.index.freqstr+
 								'")')
+                dates=pandas.date_range(assumption.index.values[0],
+                                        assumption.index.values[-1],
+                                        freq=eval('self.predicted[0].'+
+                                                 self.predicted[1]+
+                                                 '.index.freqstr'))
+                assumption = pandas.DataFrame(assumption.values, index=dates)
+                assupmtion = assumption.resample(eval('self.predicted[0].'+
+                                                      sedf.predicted[1]+
+                                                      '.index.freqstr'),
+                                                 fill_method=None)
 				assumptions.append(assumption)
 				assumption = None
 			if len(assumptions) == 1:
