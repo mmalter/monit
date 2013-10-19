@@ -473,13 +473,13 @@ class Model(object):
 	def report(self,filename,template,my_solve_object):
 		mytemplate = Template(filename=template,input_encoding="utf-8")
 		tex_report = mytemplate.render(title=self.title,solve_object=my_solve_object)
-		f = open(OUTPUTFOLDER+filename+self.now+'.tex', 'wb')
+		f = open(OUTPUTFOLDER+'/'+filename+self.now+'.tex', 'wb')
 		f.write(tex_report.encode('utf-8'))
 
 	def document(self,filename,template):
 		mytemplate = Template(filename=template,input_encoding="utf-8")
 		tex_report = mytemplate.render(title=self.title,model=self)
-		f = open(OUTPUTFOLDER+filename+self.now+'.tex', 'wb')
+		f = open(OUTPUTFOLDER+'/'+filename+self.now+'.tex', 'wb')
 		f.write(tex_report.encode('utf-8'))
 
 
