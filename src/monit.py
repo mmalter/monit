@@ -7,15 +7,22 @@ import datetime
 import matplotlib
 import matplotlib.pyplot as plt
 import os
+import configparser
 from mako.template import Template
 
 HOME = os.path.expanduser('~')
 DOTFOLDER = HOME + '/.monit'
+CONF_FILE = DOTFOLDER + 'config'
 
 if not os.path.exists(DOTFOLDER):
     os.makedirs(DOTFOLDER)
 
-OUTPUTFOLDER = 'output'
+if not os.path.exists(CONF_FILE):
+    raise IOError('You need to create a configuration file : ~/./monit/config')
+
+Config = configparser.ConfigParser()
+config = Config.read(CONF_FILE)
+OUTPUTFOLDER = config['output_folder']
 if not os.path.exists(OUTPUTFOLDER):
     os.makedirs(OUTPUTFOLDER)
 
